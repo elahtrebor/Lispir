@@ -1,12 +1,14 @@
 A small lisp interpreter in Ruby
 
-This lisp implementation uses Ruby's native Array to represent Lists and the interpreters symbol table or what lisp calls the Environment. From the Ruby standpoint we may interchangebly refer to the Ruby array as a list. Normally lisp uses Cons Cells and lists are terminated with the NIL symbol but this uses ruby arrays. 
-This lisp interpreter also does not support true LISP single pairs to be brief.
-This interpreter is just a toy and is used for illustration and educational purpose 
-but can be extended. The bulk of this code was inspired by a few links: 
+This lisp implementation uses Ruby's native Array to represent Lists and the interpreters symbol table or what lisp calls the Environment. 
+From the Ruby standpoint we may interchangebly refer to the Ruby array as a list. Normally lisp uses Cons Cells and lists are terminated 
+with the NIL symbol but this uses ruby arrays. This lisp interpreter also does not support true LISP single pairs to be brief.
+This interpreter is just a toy and is used for illustration and educational purpose but can be extended. 
+The bulk of this code was inspired by a few links: 
 https://norvig.com/lispy.html
 https://www.openbookproject.net/py4fun/lisp/lisp.html
 https://www.lwh.jp/lisp/index.html
+
 This code was tested on many Linux platforms, Android termux, and Windows cygwin.
 
 If new to LISP, there are a lot of Terms to understand in LISP so you must have a little patience.
