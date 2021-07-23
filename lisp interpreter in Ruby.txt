@@ -1,0 +1,961 @@
+A small lisp interpreter in Ruby
+
+This lisp implementation uses Ruby's native Array to represent Lists and the interpreters symbol table or what lisp calls the Environment. From the Ruby standpoint we may interchangebly refer to the Ruby array as a list. Normally lisp uses Cons Cells and lists are terminated with the NIL symbol but this uses ruby arrays. 
+This lisp interpreter also does not support true LISP single pairs to be brief.
+This interpreter is just a toy and is used for illustration and educational purpose 
+but can be extended. The bulk of this code was inspired by a few links: 
+https://norvig.com/lispy.html
+https://www.openbookproject.net/py4fun/lisp/lisp.html
+https://www.lwh.jp/lisp/index.html
+This code was tested on many Linux platforms, Android termux, and Windows cygwin.
+
+If new to LISP, there are a lot of Terms to understand in LISP so you must have a little patience.
+
+Some brief LISP Background:
+
+Lisp was originally created by John McCarthy in 1960 and was based on Lambda Calculus
+and stood for List Processor. The original version was Lisp 1.5 and this implementation
+will try to adhere to most of the Lisp 1.5 definintion. Over the years, there spawned several forms of lisp.
+One popular version called scheme which originated at MIT described a bare bones 
+derivitive of LISP and our Ruby interpreter will closely follow the Scheme anatomy.
+Lisp is naturally recursive and many languages are still taking features
+from it such as closures , garbage collection, automatic type handling, and macros.
+An amazing fact quoted by Peter Norvig: "The beauty of Scheme is that the full 
+language only needs 5 keywords and 8 syntactic forms. 
+In comparison, Python has 33 keywords and 110 syntactic forms, 
+and Java has 50 keywords and 133 syntactic forms." One magical thing
+is that a lisp intepreter can be defined in LISP with very little code. 
+
+This Interpreter will be implemented using some of the original Lisp 1.5 functions such as 
+ASSOC, PAIRLIS, CONS, CAR, CDR, EVLIS.
+We will implement these support functions first before moving on to define the body of the
+interpreter which will include READ EVAL and APPLY.
+We will demonstrate how to build and test the majority of functions with snippets of test code.
+
+I know that ruby supports LAMBDA and we could take a shortcut and cheat to make the
+interpreter shorter however this will be a learning exercise and there is more reward in 
+implementing our own LAMBDA.
+
+At the heart of LISP is the LIST which is constructed from what is called a
+CONS cell or also known as a PAIR. 
+
+CONS stands for construct and in LISP the function named CONS
+allows a user to construct LISTS. 
+
+For example the list (A B C) can be constructed with the lisp SYNTAX:
+ (CONS A (CONS B ( CONS C NIL ) ) )
+
+A list behind the scenes is typically represented in memory as a Linked list of 
+CONS Pairs and terminated with the Symbol NIL.
+
+There are two main components of a LIST in LISP named CAR and CDR.
+The CAR is the HEAD of the list which originally
+came from "Contents of Address Register". The CAR represents the first ELEMENT
+in a LIST. In Ruby our CAR element will represent the Array[0] element.
+So in the LIST   ( A B C D )
+CAR would represent A
+
+The other component is named CDR and this just represents the TAIL of a list which is 
+everything but the FIRST Element in the LIST. CDR was derived from the term 
+"Contents of Decrement Register".
+And in the list  (A B C D ) 
+the CDR would represent (B C D)
+
+Our CDR in ruby will represent everything but the first element in the array 
+which is expressed in Ruby as ARRAY[1..-1]
+
+We will setup some helper functions to refer to CAR and CDR as well.
+In Ruby we can define the following function definitions for CAR and CDR:
+
+def CAR(l)
+  return l[0]
+end
+
+def CDR(l)
+  return l[1..-1]
+end
+
+And we can test this with the following code below:
+
+#!/usr/bin/env ruby
+list1 = [1, 2, 3, 4]
+
+def CAR(l)
+  return l[0]
+end
+
+def CDR(l)
+  return l[1..-1]
+end
+
+print CAR(list1)    #  will print 1
+print CDR(list1)    # will print [2, 3, 4]
+
+####### END CODE ######
+
+
+The first time I saw these functions CAR and CDR they didn't appear to stand out at me as they seemed very low level, 
+but afer time, I realized the functions CAR and CDR helped form the basis of many other useful functions by using recursion.
+For instance to build a function to determine the list length, this could be expressed in pseudo
+code as:
+
+Function LENGTH (Arguments LIST):
+  Take a list as input.
+  Check to make sure the list is not empty or has more than 0 elements.
+  If the list is empty return 0
+  Else Increment a counter integer and call the same function named LENGTH recursively 
+    but when calling, pass the CDR of the list or everything but the first element.
+
+    And eventually you will have no more elements to process and the function
+    will return the incremented integer as each time
+    the function iterates it takes off the first element off the list that was 
+    passed to it , increments an integer, and passes the rest of the list 
+    recursively to itself.
+
+Here is a scheme/lisp version with our interpreter:
+
+(define length (lambda (l)
+             (cond
+               ((null? l) 0 )
+               (t (+ 1 (length (cdr l))))))
+)
+
+A typical lisp interpreter when run will present what is known as a REPL session.
+REPL stands for Read Eval Print Loop and basically represents the core functions 
+of the input evaluaton process.The REPL session can be run with: 
+
+$ ./lisp.rb
+>
+
+The session presents an interactive prompt to the user awaiting for input.
+
+A repl session in code form can be as simple as calling a loop containing 
+the main functions PRINT(EVAL(READ(INPUT)))
+
+
+
+The READ function will basically will create a nested list of lists based on 
+parsing the nested parens that deliniate lists. But before it can create the
+nested list of lists it will perform tokenizing.
+some example lists are:
+(1 2 3)   and gets parsed to the ruby equivilant of  [ 1, 2, 3 ]
+
+(a b c d e f)
+
+Lists can be nested
+
+((a b) (c d))
+
+These expressions as lists are also referred to as S Expressions.
+A singular piece of data that is not a LIST in general is referred to as an ATOM.
+Atoms make up S Expressions or lists.
+
+
+In our interpreter, the READ function's get the input into a nested list of lists that represent 
+a structured Array form of the original list input. When READ returns its data 
+it is ready to pass the output to the EVAL function as the nested list Expression.
+
+For example this list when parsed: (define xsqr (lambda (x) (* x x) ) )
+will equate to the ruby list [define, [ lambda, [x], [*, x, x], ], ]
+
+After we have a list of lists we can then pass the input to EVAL but we must also 
+pass another list called the Environment. The Environment is a Gobal list that serves 
+as a lookup table for SYMBOLS or variables and starts out empty until Expressions get defined.
+
+At the heart of the interpreter is the Function EVAL
+as it determines what to do with various input.
+
+It also works with the APPLY function in which will mutually recurse.
+Eval has to determine if an expression passed to it is Atomic or a LIST.
+If the expression passed to EVAL is not a list and is a SYMBOL/Variable name that has been 
+defined it will look it up. We will refer to a SYMBOL as a variable or function that gets 
+defined in LISP using the DEFINE function.There is a classic named fuction with original 
+LISP 1.5 that was named ASSOC which allows lookup for a SYMBOL and looks up against our 
+Environment (list of lists). 
+
+Our ruby lookup will use the same definition and is
+defined as:
+
+def ASSOC(key, env)
+  dbgprint "ASSOC key: " 
+  dbgprint key;   dbgprint " length";  dbgprint env.length()
+  dbgprint "\n";   dbgprint env;   dbgprint "\n"
+  if env.length() == 0
+   print  ("variable not bound " + key)
+   return []
+   elsif env[0][0] == key
+      return env[0][1]
+   else 
+     return ASSOC(key,env[1..-1])
+  end
+end
+
+And this function takes a SYMBOL which is the argument named 'key' in the function 
+and also the Environment named Env and recursively looks through the Env list to determine 
+if the key exists and if it does returns the Expression that the SYMBOL refers to.
+
+We can test this function with the below code:
+
+#!/usr/bin/ruby
+
+$Env = []
+
+def ASSOC(key, env)
+  if env.length() == 0
+   print  ("variable not bound " + key)
+   return []
+   elsif env[0][0] == key
+      return env[0][1]
+   else 
+     return ASSOC(key,env[1..-1])
+  end
+end
+
+env = $Env
+env = [["x", 10]]
+print ASSOC("x", env)
+
+##### END CODE #####
+
+And this basically just prints 10
+
+$ ./test.rb
+10
+
+But in this example we are simulating the Interpreter storing the variable in the Environment 
+with the Ruby list definition of  env = [["x", 10]]
+
+To the interpreter this variable would be defined with the LISP syntax:
+(define x 10)
+
+and we can just enter x from the REPL to show what it is defined as. versus the equivilant Ruby 
+print ASSOC("x", env)
+
+Here is the CLI REPL from the full interpreter session output illustrating that:
+
+$ ./lisp.rb
+>(define x 10)
+x
+>x
+10
+>
+
+But the ruby code above is what is happening behind the scenes.
+
+As you can see, the Environment is basically just a list of lists but serves the purpose of 
+storing key value Associations often referred to as an Association List or ALIST. 
+We could define the Environment as a hash but in this case we are not to show how simple the 
+Environment can be as we are using a standard Ruby Nested Array.
+
+Our environment starts out as an empty list:
+
+$Alist = []
+
+And we will pass it around to all of our functions.
+
+The environment gets updated by a function called PAIRLIS in which will take a list of keys and
+ a list of values and update the environment based on key to value relationship.
+
+The Ruby function for PAIRLIS is listed below:
+
+def PAIRLIS (key, val, env)
+  dbgprint "PAIRLIS CALLED\n"
+  if not key
+    return env
+  else 
+      if CAR(key) != nil
+	  env.unshift([CAR(key),CAR(val)] ) 
+	  PAIRLIS(CDR(key),CDR(val),env)
+         end
+   end
+  return env
+end
+
+
+and we can test this function as well:
+
+#!/usr/bin/ruby
+
+$Env = []
+def CAR(l)
+  return l[0]
+end
+
+def CDR(l)
+  return l[1..-1]
+end
+
+def PAIRLIS (key, val, env)
+  dbgprint "PAIRLIS CALLED\n"
+  if not key
+    return env
+  else 
+      if CAR(key) != nil
+	  env.unshift([CAR(key),CAR(val)] ) 
+	  PAIRLIS(CDR(key),CDR(val),env)
+         end
+   end
+  return env
+end
+
+env = $Env
+
+keys = ["a","b","c"]
+values = [1,2,3]
+
+result = PAIRLIS(keys, values, env)
+print result
+### END CODE #####
+
+The result when run is:
+$ ./test.rb
+[["c", 3], ["b", 2], ["a", 1]]
+
+
+But going back to the EVAL function,  we have discussed what happens when a SYMBOL is encountered
+ by EVAL,  but you might be asking what typically happens when a LIST is detected? 
+
+When EVAL detects a list:
+The interpreter looks at the first element in the list or the CAR of the list and will 
+treat the first element as a fuction name.
+And this by default winds up being a characteristic that provides a uniform mechanism for handling 
+functons.
+( <FUNCTION> <ARGUMENT LIST> )
+For example if the list is (+ 2 3 )
+The interpreter notes that the FUNCTION is  + and it will then pass the function, its arguments
+ (which is the CDR of the list) and the Environmentto the APPLY function. And the APPLY function 
+will evaluate each of the arguments and apply the function + to the rest of the list.
+So the calculation is performed + 2 3 and 5 gets returned to the PRINT function
+which will in turn just print 5.
+
+As noted in the above sequence the APPLY function will evaluate each of the arguments passed to it. 
+There is a spefic function that APPLY calls to perform this and it is named EVLIS which takes as input an argument list
+and the Environment and then returns an updated list of the evaluated elements.
+
+A lisp function typically returns what it evaluates last.
+
+We have most of the support functions ready as can start defining the body of the interpreter now.
+We can start by implementing the main interpreter loop and we will name this function simply "repl"
+The repl at first will be simple and will just be a loop calling our READ EVAL PRINT functions.
+
+We will define it below and just print the output:
+
+#!/usr/bin/ruby
+
+def repl
+print ">"
+while true
+   command = gets
+   print(command)
+   print ">"
+   print "\n"
+ end
+end
+
+repl()
+#### END CODE #####
+
+
+in running this we can see our input echo'd out.
+
+$ ./test.rb
+>test
+test
+>
+1
+1
+>
+
+but it has no way to exit so you must press CTRL + c to exit it.
+
+We can add that with the following code:
+
+#!/usr/bin/ruby
+
+def repl
+print ">"
+while true
+   command = gets
+   if command =~/^exit/
+    exit
+   end
+   print(command)
+   print ">"
+   print "\n"
+ end
+end
+
+repl()
+
+#### END CODE ####
+
+Now when we run the interpreter we should be able to type in exit.
+
+$ ./test.rb
+>test
+test
+>
+1
+1
+>
+exit
+
+
+Now that we can see the input and process it we can start defining our next Major Function named
+READ but first we will want to build a lexer or also known as a tokenizer routine. Since LISP
+is really simply formatted with parentheses we can tokenize it based on splitting the string up 
+by whitespace. But there are some formatting issues that we will need to compensate for.
+For example if the lisp input string is formatted like below:
+
+(define x 5)
+
+If we just split the string up by whitespace we would get the tokens: 
+token1 = (define
+token2 = x
+token3 = 5)
+
+And we can test this with the following code:
+
+#!/usr/bin/ruby
+
+lispExpression = "(define x 5)"
+tokens = lispExpression.split()
+print tokens 
+### END CODE ####
+When we run the code we will get 3 tokens.
+$ ./test.rb
+["(define", "x", "5)"]
+
+But what we really need is 5 tokens, an array that looks like: ["(", "define", "x", "5", ")"]
+Because the Parser needs to know when a list starts and when it ends. In our READER function,
+ the parser will start building a new list whenever it encounters a LEFT PAREN. 
+So to achieve this we will use the Ruby GSUB function to string replace LEFT AND RIGHT PARENS
+with LEFT and RIGHT PARENS with added spaces.
+
+So for example:
+
+If a part of the string looks like this "(define" it will be converted to "( define"    
+
+
+We will now accomplish this with a function named tokenize defined below
+
+def tokenize(str)
+ str = str.gsub("(" , " ( ").gsub(")", " ) ").split
+ return str
+end
+
+
+And we can test the output of this with the following code:
+
+#!/usr/bin/ruby
+
+def tokenize(str)
+ str = str.gsub("(" , " ( ").gsub(")", " ) ").split
+ return str
+end
+
+input = "(define x 5)"
+output = tokenize(input)
+
+print output
+
+### END CODE ###
+
+In running this snippet we get:
+
+$ ./test.rb
+["(", "define", "x", "5", ")"]
+
+
+Now as you can see we have this string properly tokenized or split into individual pieces.
+But we are not done with formatting the input. As indicated previously the READER has to 
+recognize nesting and this current tokenization code just creates one giant list of tokens. 
+With just this current function there is no distinction of when a nested list begins and ends. 
+Our READER will now need to iterate over the tokens and start a new nested list whenever 
+it encounters a "(" token.
+
+We will define the functions named READ and read_from to perform this below.
+And we will need to define 2 read functions as read_from will be used to start 
+the read process but the actual read function will need to recursively call itself.
+Here is the reader:
+
+def read s
+  dbgprint "READ CALLED\n"
+  read_from tokenize s
+end
+
+def tokenize(str)
+ str = str.gsub("(" , " ( ").gsub(")", " ) ").split
+ return str
+end
+
+def read_from tokens
+  raise SytaxError, 'unexpected EOF while reading' if tokens.length.zero? 
+  token = tokens.shift
+  if '(' == token
+    l = []
+    until tokens[0] == ')'
+      l << read_from( tokens )
+    end
+    tokens.shift # pop off ')'
+    return l
+  elsif ')' == token
+    raise SyntaxError, 'unexpected )'
+  else
+    return token
+  end
+end
+
+
+The input to the reader will be our bare input that we enter on the command line,
+and the output will be a nested list or Ruby Array of Arrays.
+
+And we can test the reader in the following code below:
+
+#!/usr/bin/ruby
+
+##############################  READ ##################################
+def read s
+  read_from tokenize s
+end
+
+def tokenize(str)
+ str = str.gsub("(" , " ( ").gsub(")", " ) ").split
+ return str
+end
+
+def read_from tokens
+  raise SytaxError, 'unexpected EOF while reading' if tokens.length.zero?
+  token = tokens.shift
+  if '(' == token
+    l = []
+    until tokens[0] == ')'
+      l << read_from( tokens )
+    end
+    tokens.shift # pop off ')'
+    return l
+  elsif ')' == token
+    raise SyntaxError, 'unexpected )'
+  else
+    return token
+  end
+end
+##################################################################
+
+
+def repl
+print ">"
+while true
+   command = gets
+   if command =~/^exit/
+    exit
+   end
+   tokens = read(command)
+   print tokens
+   print "\n"
+   print ">"
+
+ end
+end
+
+repl()
+
+################ END CODE ########################
+
+And in running this we can see three examples of expressions.
+1. an atom , the integer 3
+2. A single non nested list (define n 4)
+3. A nested list of lists. (define incr (lambda (x) (+ x 1) ))
+
+$ ./test.rb
+>3
+3
+>(define n 4)
+["define", "n", "4"]
+>
+
+
+$ ./test.rb
+>(define incr (lambda (x) (+ x 1) ))
+["define", "incr", ["lambda", ["x"], ["+", "x", "1"]]]
+>
+
+
+
+Another support function we will add is a type checking function that will recognize when something is a list, symbol, or number.
+
+
+def typeof(x)
+	if x.instance_of? Array
+		return "Array"
+	elsif  x =~ /^[0-9]+/
+		return "INT"
+             else
+             return "SYM"
+	end
+end
+
+and we can test this function as well:
+$ cat test.rb
+#!/usr/bin/ruby
+
+def typeof(x)
+        if x.instance_of? Array
+                return "Array"
+        elsif  x =~ /^[0-9]+/
+                return "INT"
+             else
+             return "SYM"
+        end
+end
+
+print "[1,2,3] is a " + typeof([1,2,3]) + "\n"
+print "9 is a " + typeof("9") + "\n"
+print print "DEFINE is a " + typeof("DEFINE") + "\n"
+
+#### END CODE ###
+
+and in running it: 
+
+$ ./test.rb
+[1,2,3] is a Array
+9 is a INT
+DEFINE is a SYM
+
+
+
+Now since we can we read an expression we should be able to print it. This brings us to 
+the PRINT function which is defined below:
+
+def PRINT(arg)
+  if typeof(arg) == "Array"
+    "(#{arg.map { |e| PRINT e }.join ' ' })"
+  else
+    arg.to_s
+  end
+end
+
+And we can test with the code below:
+
+#!/usr/bin/ruby
+
+def typeof(x)
+        if x.instance_of? Array
+                return "Array"
+        elsif  x =~ /^[0-9]+/
+                return "INT"
+             else
+             return "SYM"
+        end
+end
+
+def PRINT(arg)
+  if typeof(arg) == "Array"
+    "(#{arg.map { |e| PRINT e }.join ' ' })"
+  else
+    arg.to_s
+  end
+end
+str = ["a","b","c"]
+print (PRINT(str))
+print "\n"
+i = 5
+print (PRINT(i))
+
+
+###### END CODE ####
+
+
+And with this we are ready for the next stage of our interpreter and will pass
+the tokenized output to the EVAL function along with the Environment array.
+We are going to add the Functions EVAL and APPLY.
+
+The EVAL function must mainly check:
+   if there are self evaluating atoms like integers and it will just return these.
+   if there is a special form like QUOTE, DEFINE, or COND and it will call these specific forms.
+   if there is a LIST and pass the function and arguments to apply.
+
+The special forms like QUOTE do specific functions that support LISP in general.
+for instance QUOTE is magical because it tells the interpreter not to EVAL the list that is passed to it.
+This means that your CODE can be passed around as DATA.
+
+Example:
+ (quote (define x 5) )    versus (define x 5)
+
+COND is another form that works like IF ELSE branching.
+
+Here is the EVAL function:
+
+def EVAL (exp, env)
+    if   exp == 't' 
+      return 't'      # true evaluates to itself
+    elsif exp == 'nil'
+       return 'NIL'       # symbol nil same as a null list
+    elsif exp == 'env'
+        return $Env    # special command to examine env
+    elsif typeof(exp) == 'INT'
+      return exp      # numbers eval to themselves
+   elsif typeof(exp) == "SYM"
+      result = assoc(exp,env)  # look up variables
+      return result 
+    else                # check for special forms
+        if exp[0] == 'quote' || exp[0] == "'"
+            return exp[1]
+        elsif exp[0] == 'set!'
+              set(exp[1],exp[1..-1], env)
+               return exp[1]
+        elsif exp[0] == 'define'             # user defined functions
+            env = $Env = pairlis([exp[1]],[exp[2]],env)
+            return exp[1]                 # return function name
+        elsif exp[0] == 'cond'
+            return evcon(exp[1..-1], env)
+        else 
+            x = evlis(exp[1..-1], env) 
+            return apply(exp[0],x, env)
+        end
+    end
+end
+
+In our apply function we will define many internal PRIMITIVES or basically internal functions like ADD, SUB, MUL in which we are
+on the fly handling most of these algorithms,  but you dont have to do it this way and can have apply call them as external functions.
+However it was less code to implement these within the apply function.
+
+There are some special features to outline here.
+When APPLY gets a LAMBDA it calls PAIRLIS on the arguments and updates the ENVIRONMENT. This will provide the backbone
+of how our functions get defined and referenced.
+
+And here is the APPLY function which becomes mutually recursive with EVAL
+
+def apply (fn,args,env)
+    if typeof(fn)=='SYM'   # name of a function
+        if fn == 'atom' 
+          if typeof(args[0]) == 'Array'
+            return 'NIL'
+            else
+           return 't'
+           end
+        elsif fn == 'car'
+             return args[0][0] # first element of 1st arg
+        elsif fn == 'null?'
+             if args[0].length() < 1
+              return 't'
+             else 
+              return 'NIL'
+             end
+        elsif fn == 'cdr'
+             return args[0][1..-1]  # tail of 1st arg
+        elsif fn == '+' 
+             return args.reduce(0) { |sum, num| sum.to_i + num.to_i }
+        elsif fn == '-'   
+          return args.inject{ |acc, x| acc.to_i - x.to_i }
+        elsif fn == '*'  
+             return args.inject{ |acc, x| acc.to_i * x.to_i }
+        elsif fn == '/'    
+             return args.inject{ |acc, x| acc.to_i / x.to_i }
+        elsif fn == '>'                
+             if args[0].to_i > args[1].to_i
+               return 't'
+             else 
+               return 'NIL'
+             end
+        elsif fn == '<'    
+             if args[0].to_i < args[1].to_i
+               return 't'
+             else 
+               return 'NIL'
+             end
+        elsif fn == 'eq'   
+          if args[0].to_s == args[1].to_s
+            return 't'
+           else 
+             return 'NIL'
+          end
+        elsif fn == 'not'   
+           if args[0].to_s != args[1].to_s
+            return 't'
+            else
+              return 'NIL'
+           end
+        elsif fn == 'cons' 
+            if typeof(args[1]) != 'Array' 
+                   args[1] = [args[1]]
+            return [args[0]] + args[1]
+            end
+        else 
+            return apply(EVAL(fn,env),args,env)
+         end
+    elsif fn[0] == 'lambda' 
+        return EVAL(fn[2], pairlis(fn[1],args,env))
+    else                   
+      print "Can't apply \n"
+   end
+end
+
+
+
+
+The only thing left is to add the leftover special forms for SET and EVCON in which will list.
+SET changes a variable once its defined.
+
+EVCON evaluates a condition or COND form.
+
+
+
+def set(key, val, env)                  #  return a variable binding          
+  if env.length() == 0
+   print ("variable not bound: " + key + "\n") 
+   return 'NIL'
+   else
+    x = 0
+    env.each do
+     if env[x][0] == key
+       env[x][1] = val[1]
+       return 
+       x = x + 1
+     end
+   end
+  end
+end
+
+def evcon (c, env)
+    if c.length() == 0 
+      return []
+    elsif EVAL(c[0][0], env) != 'NIL' 
+       return EVAL(c[0][1],env)
+    else
+      return evcon(c[1..-1],env)
+    end
+end
+
+
+ And it helps to update our REPL function to ADD the ability to track when parenthesis are unbalenced as well.
+
+
+def repl
+ lp = rp = 0
+ print ">"
+ command = ""
+while true
+ inputstr = gets
+ inputstr = inputstr.gsub('\n', '')
+ if inputstr !~/[\S]+/
+   print ">"
+   next
+ elsif inputstr =~/^exit/
+   exit
+ elsif inputstr =~/^debug/
+   if $DEBUG == 0
+      print "TRACE PROGRAM RUNNING..\n"
+      $DEBUG = 1
+      next
+   else
+      $DEBUG = 0 
+      next
+   end
+ end
+ lcount = inputstr.count('(')
+ rcount = inputstr.count(')')
+ lp = lp + lcount
+ rp = rp + rcount
+
+ if rp > lp 
+    print "ERROR: Unbalanced Parens\n>"
+    rp = lp = 0
+   next
+ end
+
+ inputstr = inputstr.strip
+ command.concat(inputstr)
+  if lp == rp
+   tokens = read(command)
+   print(putSexp(EVAL(tokens ,$Env)))
+   command = ""
+   print "\n"
+   print ">"
+  end
+ end
+end
+
+repl()
+
+
+Now we can test the interpreter.
+
+$ ./lisp.rb
+>(define n 3)
+n
+>(+ n 1)
+4
+>(define xsqr (lambda (x) (* x x) ) )
+xsqr
+>(xsqr 4)
+16
+>(define sumofsquares (lambda (a b) (+ (xsqr a) (xsqr b) ) ) )
+sumofsquares
+>(sumofsquares 2 3)
+13
+>(define fact
+  (lambda (x)
+        (cond
+           ((eq x 0) 1)
+            (t (* x (fact (- x 1) ) ) ) ))
+)
+fact
+>
+>(fact 5)
+120
+>
+>(define length (lambda (l)
+             (cond
+               ((null? l) 0 )
+               (t (+ 1 (length (cdr l))))))
+)
+length
+>
+
+>(length (quote (a b c d e f)) )
+6
+>
+
+>(define list1 (a b c d e f g h i j k l m n o p q r s t u v w x y z ) )
+list1
+>list1
+(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+>(car list1)
+a
+>(length list1)
+26
+
+
+This is great but what if we wanted to create a script for our interpreter. We can do that in BASH:
+
+#!/bin/bash
+./lisp.rb << HERE
+(define list1 (a b c d e f))
+(define length (lambda (l) (cond ((null? l) 0 ) (t (+ 1 (length (cdr l)))))))
+(length list1)
+exit
+HERE
+
+
+
+now we can run our script and it will call the interpreter
+
+$chmod +x test.l
+$ ./test.l
+>list1
+>length
+>6
+>
+
+
+
+
+
+
+
+
+
+
+
+
