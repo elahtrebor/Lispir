@@ -1,4 +1,4 @@
-A small lisp interpreter in Ruby
+LISPIR (LISP In Ruby) - A small lisp interpreter 
 
 This lisp implementation uses Ruby's native Array to represent Lists and the interpreters symbol table or what lisp calls the Environment. 
 From the Ruby standpoint we may interchangebly refer to the Ruby array as a list. Normally lisp uses Cons Cells and lists are terminated 
