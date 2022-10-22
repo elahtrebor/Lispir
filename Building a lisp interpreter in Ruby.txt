@@ -261,7 +261,6 @@ The environment gets updated by a function called PAIRLIS in which will take a l
 The Ruby function for PAIRLIS is listed below:
 
 def PAIRLIS (key, val, env)
-  dbgprint "PAIRLIS CALLED\n"
   if not key
     return env
   else 
@@ -288,7 +287,6 @@ def CDR(l)
 end
 
 def PAIRLIS (key, val, env)
-  dbgprint "PAIRLIS CALLED\n"
   if not key
     return env
   else 
